@@ -1,0 +1,106 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: venus_postgres
+    environment:
+      POSTGRES_USER: ${DATABASE_USER:-venus_user}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD:-venus_password}
+      POSTGRES_DB: ${DATABASE_NAME:-venus_db}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/db/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DATABASE_USER:-venus_user}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - venus_network
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: venus_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - venus_network
+
+  # pgAdmin (Database Management)
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: venus_pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@venuscorporate.com}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
+    ports:
+      - "5050:80"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - venus_network
+
+  # Backend API Server (Optional - for containerized backend)
+  # backend:
+  #   build:
+  #     context: ./backend
+  #     dockerfile: Dockerfile
+  #   container_name: venus_backend
+  #   ports:
+  #     - "5000:5000"
+  #   environment:
+  #     DATABASE_URL: postgresql://${DATABASE_USER:-venus_user}:${DATABASE_PASSWORD:-venus_password}@postgres:5432/${DATABASE_NAME:-venus_db}
+  #     REDIS_URL: redis://redis:6379
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
+  #   volumes:
+  #     - ./backend:/app
+  #     - /app/node_modules
+  #   networks:
+  #     - venus_network
+
+  # Frontend (Optional - for containerized frontend)
+  # frontend:
+  #   build:
+  #     context: ./frontend
+  #     dockerfile: Dockerfile
+  #   container_name: venus_frontend
+  #   ports:
+  #     - "3000:3000"
+  #   environment:
+  #     NEXT_PUBLIC_API_URL: http://backend:5000
+  #   depends_on:
+  #     - backend
+  #   networks:
+  #     - venus_network
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  venus_network:
+    driver: bridge
+
+# Usage:
+# Start services: docker-compose up -d
+# Stop services: docker-compose down
+# View logs: docker-compose logs -f
+# Rebuild: docker-compose up -d --build
+# Remove volumes: docker-compose down -v
